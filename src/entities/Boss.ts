@@ -3,9 +3,9 @@ import { Enemy } from "./Enemy";
 import { TILE_SIZE } from "../config";
 
 const JUMP_INTERVAL = 3000;
-// ボス部屋：x=38〜67（左壁開口あり）→ 内側に余裕を持たせた境界
-const BOSS_PATROL_LEFT  = 40 * TILE_SIZE;
-const BOSS_PATROL_RIGHT = 66 * TILE_SIZE;
+// ボス部屋：x=40〜67（新マップ）→ 内側に余裕を持たせた境界
+const BOSS_PATROL_LEFT  = 42 * TILE_SIZE;
+const BOSS_PATROL_RIGHT = 65 * TILE_SIZE;
 
 export class Boss extends Enemy {
   private jumpTimer: number = 0;

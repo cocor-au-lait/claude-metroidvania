@@ -18,11 +18,17 @@ const ZONE_COLOR: Record<string, number> = {
 };
 
 /**
- * マップ構成（タイル座標）
+ * マップ構成（タイル座標）—— ハブ型レイアウト
  *
- * [スタート(0-29,0-13)]─corridor─[アビリティ(38-67,0-13)]
- *         │ vCorr(10-13,14-20)     │ vCorr(54-57,14-20)
- * [中間(0-29,21-34)]  ─corridor─  [ボス(38-67,21-34)]
+ *            [アビリティ(23-36,0-11)]
+ *                   ↕ (x:28-29, y:11-12)
+ * [中間(0-19,12-22)] ←→ [スタート(20-39,12-22)] ←→ [ボス前室(40-55,12-22)]
+ *                                                        ↕ 段差ゲート(x:48-49,y:17-21)
+ *                                                     [ボス部屋(40-67,23-34)]
+ *
+ * ゲート（暫定）：
+ *   ボス前室内に3タイル高(96px)の壁。片足ジャンプ最大128px > 96px → 越えられる（暫定）
+ *   TODO: 二段ジャンプ実装後に5タイル高(160px)へ戻す
  */
 export class GameScene extends Phaser.Scene {
   private player!: Player;
@@ -101,45 +107,53 @@ export class GameScene extends Phaser.Scene {
       for (let tx = x; tx < x + w; tx++) map[y][tx] = zone;
     };
 
+    const addWall = (x: number, y: number, h: number, zone: string) => {
+      for (let ty = y; ty < y + h; ty++) map[ty][x] = zone;
+    };
+
     const clearHole = (x: number, y: number, w: number, h: number) => {
       for (let ty = y; ty < y + h; ty++)
         for (let tx = x; tx < x + w; tx++) map[ty][tx] = null;
     };
 
     // ── 部屋 ──
-    fillRoom(0,  0,  30, 14, "start");
-    fillRoom(38, 0,  30, 14, "ability");
-    fillRoom(0,  21, 30, 14, "middle");
-    fillRoom(38, 21, 30, 14, "boss");
+    fillRoom(23,  0, 14, 12, "ability");  // アビリティ部屋 (x:23-36, y:0-11)
+    fillRoom(20, 12, 20, 11, "start");    // スタート（ハブ）(x:20-39, y:12-22)
+    fillRoom( 0, 12, 20, 11, "middle");   // 中間エリア (x:0-19, y:12-22)
+    fillRoom(40, 12, 16, 11, "corridor"); // ボス前室 (x:40-55, y:12-22)
+    fillRoom(40, 23, 28, 12, "boss");     // ボス部屋 (x:40-67, y:23-34)
 
-    // ── 水平通路（床レベルで部屋を接続）──
-    fillRoom(30, 9,  8, 5, "corridor"); // 上段 floor=y13
-    fillRoom(30, 30, 8, 5, "corridor"); // 下段 floor=y34
-
-    // ── 垂直通路 ──
-    fillRoom(10, 14, 4, 7, "corridor"); // 左：スタート ↕ 中間
-    fillRoom(54, 14, 4, 7, "corridor"); // 右：アビリティ ↕ ボス
+    // ── 開口部：垂直接続 ──
+    clearHole(28, 10, 2, 3); // アビリティ部屋床 ↔ スタート天井 (x:28-29, y:10-12)
+    clearHole(52, 22, 3, 2); // ボス前室床 ↔ ボス部屋天井（ゲート右側）(x:52-54, y:22-23)
 
     // ── 開口部：水平接続 ──
-    clearHole(29, 10, 2, 3); // スタート右壁 ↔ 上段通路左壁
-    clearHole(37, 10, 2, 3); // 上段通路右壁 ↔ アビリティ左壁
-    clearHole(29, 31, 2, 3); // 中間右壁 ↔ 下段通路左壁
-    clearHole(37, 31, 2, 3); // 下段通路右壁 ↔ ボス左壁
+    clearHole(19, 16, 2, 3); // 中間右壁 ↔ スタート左壁 (x:19-20, y:16-18)
+    clearHole(39, 16, 2, 3); // スタート右壁 ↔ ボス前室左壁 (x:39-40, y:16-18)
 
-    // ── 開口部：垂直接続（側壁を残し内側2タイルのみ開口）──
-    clearHole(11, 13, 2, 2); // スタート床 ↔ 左縦通路天井
-    clearHole(11, 20, 2, 2); // 左縦通路床 ↔ 中間天井
-    clearHole(55, 13, 2, 2); // アビリティ床 ↔ 右縦通路天井
-    clearHole(55, 20, 2, 2); // 右縦通路床 ↔ ボス天井
+    // ── ゲート（ボス前室内）── ※暫定：3タイル高(96px)で単純ジャンプで突破可能
+    // TODO: 二段ジャンプ実装後に5タイル高(160px)へ戻す（必須ゲート化）
+    addWall(48, 19, 3, "corridor"); // x:48, y:19-21
+    addWall(49, 19, 3, "corridor"); // x:49, y:19-21
 
     // ── 内部プラットフォーム ──
-    addPlatform(5,  10, 6, "start");
-    addPlatform(15,  8, 5, "start");
-    addPlatform(44, 10, 5, "ability");
-    addPlatform(49,  7, 6, "ability");
-    addPlatform(5,  30, 6, "middle");
-    addPlatform(18, 27, 7, "middle");
-    addPlatform(42, 29, 7, "boss");
+    // アビリティ部屋（低い足場 → 高い足場へ誘導）
+    addPlatform(25,  7, 5, "ability"); // 低い足場
+    addPlatform(32,  3, 4, "ability"); // 高い足場（アビリティアイテム台）
+
+    // スタート部屋
+    // 上へのルート: 床(y:22) → y:18 → y:14(開口部直下) → 開口部(y:12) → アビリティ部屋
+    addPlatform(22, 18, 5, "start");            // 第1段 (4タイル上昇=128px)
+    addPlatform(26, 15, 5, "start");            // 第2段・開口部直下 (4タイル上昇=128px)
+    addPlatform(33, 16, 5, "start");
+
+    // 中間エリア
+    addPlatform( 3, 18, 5, "middle");
+    addPlatform(12, 15, 5, "middle");
+
+    // ボス部屋
+    addPlatform(44, 29, 7, "boss");
+    addPlatform(57, 26, 5, "boss");
 
     return map;
   }
@@ -164,12 +178,15 @@ export class GameScene extends Phaser.Scene {
   /** セーブポイント（シアン）とアビリティアイテム（ゴールド）の仮マーカー */
   private spawnMarkers(): void {
     const TS = TILE_SIZE;
-    this.add.rectangle(3 * TS + TS / 2, 12 * TS, TS, TS * 1.5, 0x00ffff, 0.85);
-    this.add.rectangle(51 * TS + TS / 2, 6 * TS + TS / 2, TS, TS, 0xffd700, 0.9);
+    // セーブポイント：中間エリア右寄り（ボス前の最終セーブ）
+    this.add.rectangle(14 * TS + TS / 2, 21 * TS, TS, TS * 1.5, 0x00ffff, 0.85);
+    // アビリティアイテム：アビリティ部屋の高い足場の上
+    this.add.rectangle(34 * TS + TS / 2, 2 * TS + TS / 2, TS, TS, 0xffd700, 0.9);
   }
 
   private createPlayer(): void {
-    this.player = new Player(this, TILE_SIZE * 3, TILE_SIZE * 12);
+    // スタート部屋（x:20-39, y:12-22）の左寄りに配置
+    this.player = new Player(this, 24 * TILE_SIZE, 20 * TILE_SIZE);
     this.physics.add.collider(this.player, this.platforms);
   }
 
@@ -183,15 +200,12 @@ export class GameScene extends Phaser.Scene {
       this.enemies.push(enemy);
     };
 
-    // スタート部屋（穴 x=10-13 を避けてパトロール）
-    addEnemy(new Enemy(this, 18 * TILE_SIZE, 12 * TILE_SIZE, "slime", 2, 1, 80, 14 * TILE_SIZE, 27 * TILE_SIZE));
-
-    // 中間エリア（floor tile y=34 → スポーン y=33 tile、穴 x=10-13 を避ける）
-    addEnemy(new Enemy(this, 5  * TILE_SIZE, 33 * TILE_SIZE, "slime", 2, 1, 80,  1 * TILE_SIZE,  9 * TILE_SIZE));
-    addEnemy(new Enemy(this, 20 * TILE_SIZE, 33 * TILE_SIZE, "slime", 2, 1, 80, 14 * TILE_SIZE, 28 * TILE_SIZE));
+    // 中間エリア（x:0-19, y:12-22 → 床 y:22、内部 y:21 にスポーン）
+    addEnemy(new Enemy(this,  4 * TILE_SIZE, 21 * TILE_SIZE, "slime", 2, 1, 80,  1 * TILE_SIZE,  8 * TILE_SIZE));
+    addEnemy(new Enemy(this, 13 * TILE_SIZE, 21 * TILE_SIZE, "slime", 2, 1, 80,  9 * TILE_SIZE, 18 * TILE_SIZE));
 
     // ボス部屋
-    addEnemy(new Boss(this, 1680, 33 * TILE_SIZE));
+    addEnemy(new Boss(this, 55 * TILE_SIZE, 33 * TILE_SIZE));
   }
 
   private setupCamera(): void {
