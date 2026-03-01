@@ -7,6 +7,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private hasDoubleJumped: boolean = false;
   private canAttack: boolean = true;
   private attackActive: boolean = false;
+  private invincible: boolean = false;
 
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyA: Phaser.Input.Keyboard.Key;
@@ -37,6 +38,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   private handleMove(): void {
+    if (this.attackActive) {
+      this.setVelocityX(0);
+      return;
+    }
+
     const left = this.cursors.left.isDown || this.keyA.isDown;
     const right = this.cursors.right.isDown || this.keyD.isDown;
 
@@ -80,10 +86,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     const dir = this.flipX ? -1 : 1;
     const slash = this.scene.add.rectangle(
-      this.x + dir * TILE_SIZE * 0.75,
+      this.x + dir * TILE_SIZE * 1.25,
       this.y,
+      TILE_SIZE * 2,
       TILE_SIZE,
-      TILE_SIZE * 0.5,
       0xffee44,
       0.8
     );
@@ -101,9 +107,20 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   }
 
   takeDamage(amount: number): number {
+    if (this.invincible) return this.hp;
     this.hp = Math.max(0, this.hp - amount);
-    this.setTint(0xff3333);
-    this.scene.time.delayedCall(300, () => this.clearTint());
+    this.invincible = true;
+    this.scene.tweens.add({
+      targets: this,
+      alpha: { from: 1, to: 0.2 },
+      duration: 100,
+      yoyo: true,
+      repeat: 5,
+      onComplete: () => this.setAlpha(1),
+    });
+    this.scene.time.delayedCall(1000, () => {
+      this.invincible = false;
+    });
     return this.hp;
   }
 
@@ -119,11 +136,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   getAttackRect(): Phaser.Geom.Rectangle | null {
     if (!this.attackActive) return null;
     const dir = this.flipX ? -1 : 1;
+    const w = TILE_SIZE * 2;
+    const h = TILE_SIZE;
     return new Phaser.Geom.Rectangle(
-      this.x + dir * TILE_SIZE * 0.25,
-      this.y - TILE_SIZE * 0.25,
-      TILE_SIZE,
-      TILE_SIZE * 0.5
+      this.x + (dir > 0 ? TILE_SIZE * 0.25 : -TILE_SIZE * 2.25),
+      this.y - TILE_SIZE * 0.5,
+      w,
+      h
     );
   }
 }
