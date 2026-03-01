@@ -6,6 +6,7 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   protected patrolSpeed: number;
   protected patrolLeft: number;
   protected patrolRight: number;
+  protected patrolDir: 1 | -1 = 1;
   private hitInvincible: boolean = false;
 
   constructor(
@@ -36,14 +37,15 @@ export class Enemy extends Phaser.Physics.Arcade.Sprite {
   }
 
   protected handlePatrol(): void {
-    const body = this.body as Phaser.Physics.Arcade.Body;
-    if (body.blocked.left || this.x <= this.patrolLeft) {
-      this.setVelocityX(this.patrolSpeed);
-      this.setFlipX(false);
-    } else if (body.blocked.right || this.x >= this.patrolRight) {
-      this.setVelocityX(-this.patrolSpeed);
-      this.setFlipX(true);
+    // 座標のみで折り返し判定（body.blocked は台の端タイルで誤反応するため使用しない）
+    if (this.x <= this.patrolLeft) {
+      this.patrolDir = 1;
+    } else if (this.x >= this.patrolRight) {
+      this.patrolDir = -1;
     }
+    // 毎フレーム速度を強制再設定（衝突で速度が0になっても即復帰）
+    this.setVelocityX(this.patrolSpeed * this.patrolDir);
+    this.setFlipX(this.patrolDir < 0);
   }
 
   takeDamage(amount: number): number {

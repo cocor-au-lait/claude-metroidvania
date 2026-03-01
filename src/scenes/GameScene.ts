@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { TILE_SIZE, PLAYER_WIDTH, PLAYER_HEIGHT } from "../config";
+import { TILE_SIZE, PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_HP } from "../config";
 import { Player } from "../entities/Player";
 import { Enemy } from "../entities/Enemy";
 import { Boss } from "../entities/Boss";
@@ -26,15 +26,16 @@ const ZONE_COLOR: Record<string, number> = {
  *                                                        ↕ 段差ゲート(x:48-49,y:17-21)
  *                                                     [ボス部屋(40-67,23-34)]
  *
- * ゲート（暫定）：
- *   ボス前室内に3タイル高(96px)の壁。片足ジャンプ最大128px > 96px → 越えられる（暫定）
- *   TODO: 二段ジャンプ実装後に5タイル高(160px)へ戻す
+ * ダブルジャンプ必須ゲート：
+ *   ボス前室内に5タイル高(160px)の壁。片足ジャンプ最大~136px < 160px → 越えられない
+ *   二段ジャンプ最大~272px > 160px → 越えられる
  */
 export class GameScene extends Phaser.Scene {
   private player!: Player;
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
   private enemies: Enemy[] = [];
   private spawnPoint = { x: 24 * TILE_SIZE, y: 20 * TILE_SIZE };
+  private gameEnded = false;
 
   constructor() {
     super({ key: "GameScene" });
@@ -48,6 +49,8 @@ export class GameScene extends Phaser.Scene {
     this.spawnInteractables();
     this.spawnEnemies();
     this.setupCamera();
+    this.registry.set("playerHp", PLAYER_HP);
+    this.registry.set("gameState", "playing");
     this.scene.launch("UIScene");
   }
 
@@ -132,10 +135,10 @@ export class GameScene extends Phaser.Scene {
     clearHole(19, 16, 2, 3); // 中間右壁 ↔ スタート左壁 (x:19-20, y:16-18)
     clearHole(39, 16, 2, 3); // スタート右壁 ↔ ボス前室左壁 (x:39-40, y:16-18)
 
-    // ── ゲート（ボス前室内）── ※暫定：3タイル高(96px)で単純ジャンプで突破可能
-    // TODO: 二段ジャンプ実装後に5タイル高(160px)へ戻す（必須ゲート化）
-    addWall(48, 19, 3, "corridor"); // x:48, y:19-21
-    addWall(49, 19, 3, "corridor"); // x:49, y:19-21
+    // ── ダブルジャンプ必須ゲート（ボス前室内）──
+    // 5タイル高(160px) > 片足ジャンプ最大(~136px) → 二段ジャンプで突破
+    addWall(48, 17, 5, "corridor"); // x:48, y:17-21
+    addWall(49, 17, 5, "corridor"); // x:49, y:17-21
 
     // ── 内部プラットフォーム ──
     // アビリティ部屋（低い足場 → 高い足場へ誘導）
@@ -222,9 +225,13 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.collider(enemy, this.platforms);
       this.physics.add.collider(this.player, enemy, () => {
         const hp = this.player.takeDamage(enemy.getContactDamage());
-        if (hp <= 0) this.time.delayedCall(300, () => {
-          this.player.respawn(this.spawnPoint.x, this.spawnPoint.y);
-        });
+        if (hp <= 0 && !this.gameEnded) {
+          this.registry.set("gameState", "dead");
+          this.time.delayedCall(1500, () => {
+            this.player.respawn(this.spawnPoint.x, this.spawnPoint.y);
+            this.registry.set("gameState", "playing");
+          });
+        }
       });
       this.enemies.push(enemy);
     };
@@ -246,9 +253,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(): void {
+    if (this.gameEnded) return;
     this.player.update();
     this.enemies.forEach(e => { if (e.active) e.update(); });
     this.checkAttackHits();
+    this.registry.set("playerHp", this.player.getHp());
   }
 
   private checkAttackHits(): void {
@@ -263,7 +272,13 @@ export class GameScene extends Phaser.Scene {
         new Phaser.Geom.Rectangle(b.x, b.y, b.width, b.height)
       )) {
         const hp = enemy.takeDamage(1);
-        if (hp <= 0) enemy.destroy();
+        if (hp <= 0) {
+          enemy.destroy();
+          if (enemy instanceof Boss) {
+            this.gameEnded = true;
+            this.registry.set("gameState", "clear");
+          }
+        }
       }
     });
   }
