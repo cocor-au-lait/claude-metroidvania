@@ -1,0 +1,32 @@
+{
+  "name": "claude-metroidvania",
+  "version": "1.0.0",
+  "description": "2D横スクロール探索型アクションゲーム（メトロイドヴァニア）のプロトタイプ。",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cocor-au-lait/claude-metroidvania.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/cocor-au-lait/claude-metroidvania/issues"
+  },
+  "homepage": "https://github.com/cocor-au-lait/claude-metroidvania#readme",
+  "dependencies": {
+    "phaser": "^3.90.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
+  }
+}
