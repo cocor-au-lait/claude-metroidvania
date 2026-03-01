@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import { TILE_SIZE, PLAYER_WIDTH, PLAYER_HEIGHT } from "../config";
+import { TILE_SIZE, PLAYER_WIDTH, PLAYER_HEIGHT, PLAYER_HP } from "../config";
 import { Player } from "../entities/Player";
 import { Enemy } from "../entities/Enemy";
 import { Boss } from "../entities/Boss";
@@ -35,6 +35,7 @@ export class GameScene extends Phaser.Scene {
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
   private enemies: Enemy[] = [];
   private spawnPoint = { x: 24 * TILE_SIZE, y: 20 * TILE_SIZE };
+  private gameEnded = false;
 
   constructor() {
     super({ key: "GameScene" });
@@ -48,6 +49,8 @@ export class GameScene extends Phaser.Scene {
     this.spawnInteractables();
     this.spawnEnemies();
     this.setupCamera();
+    this.registry.set("playerHp", PLAYER_HP);
+    this.registry.set("gameState", "playing");
     this.scene.launch("UIScene");
   }
 
@@ -222,9 +225,13 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.collider(enemy, this.platforms);
       this.physics.add.collider(this.player, enemy, () => {
         const hp = this.player.takeDamage(enemy.getContactDamage());
-        if (hp <= 0) this.time.delayedCall(300, () => {
-          this.player.respawn(this.spawnPoint.x, this.spawnPoint.y);
-        });
+        if (hp <= 0 && !this.gameEnded) {
+          this.registry.set("gameState", "dead");
+          this.time.delayedCall(1500, () => {
+            this.player.respawn(this.spawnPoint.x, this.spawnPoint.y);
+            this.registry.set("gameState", "playing");
+          });
+        }
       });
       this.enemies.push(enemy);
     };
@@ -246,9 +253,11 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(): void {
+    if (this.gameEnded) return;
     this.player.update();
     this.enemies.forEach(e => { if (e.active) e.update(); });
     this.checkAttackHits();
+    this.registry.set("playerHp", this.player.getHp());
   }
 
   private checkAttackHits(): void {
@@ -263,7 +272,13 @@ export class GameScene extends Phaser.Scene {
         new Phaser.Geom.Rectangle(b.x, b.y, b.width, b.height)
       )) {
         const hp = enemy.takeDamage(1);
-        if (hp <= 0) enemy.destroy();
+        if (hp <= 0) {
+          enemy.destroy();
+          if (enemy instanceof Boss) {
+            this.gameEnded = true;
+            this.registry.set("gameState", "clear");
+          }
+        }
       }
     });
   }
