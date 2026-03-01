@@ -34,6 +34,7 @@ export class GameScene extends Phaser.Scene {
   private player!: Player;
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
   private enemies: Enemy[] = [];
+  private spawnPoint = { x: 24 * TILE_SIZE, y: 20 * TILE_SIZE };
 
   constructor() {
     super({ key: "GameScene" });
@@ -43,8 +44,8 @@ export class GameScene extends Phaser.Scene {
     this.createTextures();
     const tileMap = this.buildTileMap();
     this.platforms = this.spawnTiles(tileMap);
-    this.spawnMarkers();
     this.createPlayer();
+    this.spawnInteractables();
     this.spawnEnemies();
     this.setupCamera();
     this.scene.launch("UIScene");
@@ -175,13 +176,39 @@ export class GameScene extends Phaser.Scene {
     return group;
   }
 
-  /** セーブポイント（シアン）とアビリティアイテム（ゴールド）の仮マーカー */
-  private spawnMarkers(): void {
+  /** アビリティアイテム（二段ジャンプ）とセーブポイントを配置 */
+  private spawnInteractables(): void {
     const TS = TILE_SIZE;
-    // セーブポイント：中間エリア右寄り（ボス前の最終セーブ）
-    this.add.rectangle(14 * TS + TS / 2, 21 * TS, TS, TS * 1.5, 0x00ffff, 0.85);
-    // アビリティアイテム：アビリティ部屋の高い足場の上
-    this.add.rectangle(34 * TS + TS / 2, 2 * TS + TS / 2, TS, TS, 0xffd700, 0.9);
+
+    // ── アビリティアイテム（二段ジャンプ）──
+    // アビリティ部屋の高い足場の上 (x:34, y:2)
+    const abilityX = 34 * TS + TS / 2;
+    const abilityY = 2 * TS + TS / 2;
+    const abilityVis = this.add.rectangle(abilityX, abilityY, TS, TS, 0xffd700, 0.9);
+    const abilityZone = this.add.zone(abilityX, abilityY, TS, TS);
+    this.physics.add.existing(abilityZone, true);
+    this.physics.add.overlap(this.player, abilityZone, () => {
+      if (!abilityVis.active) return;
+      this.player.enableDoubleJump();
+      abilityVis.destroy();
+      abilityZone.destroy();
+      const txt = this.add.text(abilityX, abilityY - 24, '二段ジャンプ 取得！', {
+        fontSize: '14px', color: '#ffd700', stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5);
+      this.time.delayedCall(2000, () => txt.destroy());
+    });
+
+    // ── セーブポイント ──
+    // 中間エリア右寄り (x:14, y:21)
+    const saveX = 14 * TS + TS / 2;
+    const saveY = 21 * TS;
+    this.add.rectangle(saveX, saveY, TS, TS * 1.5, 0x00ffff, 0.85);
+    const saveZone = this.add.zone(saveX, saveY, TS, TS * 1.5);
+    this.physics.add.existing(saveZone, true);
+    this.physics.add.overlap(this.player, saveZone, () => {
+      this.spawnPoint = { x: saveX, y: saveY - TS };
+      this.player.healFull();
+    });
   }
 
   private createPlayer(): void {
@@ -195,7 +222,9 @@ export class GameScene extends Phaser.Scene {
       this.physics.add.collider(enemy, this.platforms);
       this.physics.add.collider(this.player, enemy, () => {
         const hp = this.player.takeDamage(enemy.getContactDamage());
-        if (hp <= 0) this.time.delayedCall(300, () => this.scene.restart());
+        if (hp <= 0) this.time.delayedCall(300, () => {
+          this.player.respawn(this.spawnPoint.x, this.spawnPoint.y);
+        });
       });
       this.enemies.push(enemy);
     };
