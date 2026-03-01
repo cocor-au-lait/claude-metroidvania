@@ -1,7 +1,8 @@
 {
   "name": "claude-metroidvania",
   "version": "1.0.0",
-  "description": "2D横スクロール探索型アクションゲーム（メトロイドヴァニア）のプロトタイプ。",
+  "description": "Claude Code による AI 駆動開発のデモ — 2D メトロイドヴァニア型ゲームプロトタイプ",
+  "private": true,
   "main": "index.js",
   "directories": {
     "doc": "docs"
