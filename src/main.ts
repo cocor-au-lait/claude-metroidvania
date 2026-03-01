@@ -12,7 +12,7 @@ new Phaser.Game({
   backgroundColor: "#1a1a2e",
   physics: {
     default: "arcade",
-    arcade: { gravity: { x: 0, y: 600 }, debug: false },
+    arcade: { gravity: { x: 0, y: 1500 }, debug: false },
   },
   scene: [BootScene, PreloadScene, GameScene, UIScene],
 });
