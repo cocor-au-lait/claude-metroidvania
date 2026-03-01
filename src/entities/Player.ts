@@ -124,6 +124,18 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     return this.hp;
   }
 
+  healFull(): void {
+    this.hp = PLAYER_HP;
+  }
+
+  respawn(x: number, y: number): void {
+    this.setPosition(x, y);
+    this.setVelocity(0, 0);
+    this.hp = PLAYER_HP;
+    this.invincible = false;
+    this.setAlpha(1);
+  }
+
   getHp(): number {
     return this.hp;
   }
