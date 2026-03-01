@@ -1,6 +1,8 @@
 import Phaser from "phaser";
 import { TILE_SIZE, PLAYER_WIDTH, PLAYER_HEIGHT } from "../config";
 import { Player } from "../entities/Player";
+import { Enemy } from "../entities/Enemy";
+import { Boss } from "../entities/Boss";
 
 // マップサイズ（タイル単位）
 const MAP_W = 68;
@@ -25,6 +27,7 @@ const ZONE_COLOR: Record<string, number> = {
 export class GameScene extends Phaser.Scene {
   private player!: Player;
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
+  private enemies: Enemy[] = [];
 
   constructor() {
     super({ key: "GameScene" });
@@ -36,6 +39,7 @@ export class GameScene extends Phaser.Scene {
     this.platforms = this.spawnTiles(tileMap);
     this.spawnMarkers();
     this.createPlayer();
+    this.spawnEnemies();
     this.setupCamera();
     this.scene.launch("UIScene");
   }
@@ -56,6 +60,24 @@ export class GameScene extends Phaser.Scene {
       tg.generateTexture(`tile-${zone}`, TILE_SIZE, TILE_SIZE);
       tg.destroy();
     });
+
+    // スライム：オレンジ
+    const sg = this.add.graphics();
+    sg.fillStyle(0xff6b35);
+    sg.fillRect(0, 0, 28, 28);
+    sg.lineStyle(1, 0x000000, 0.4);
+    sg.strokeRect(0, 0, 28, 28);
+    sg.generateTexture("slime", 28, 28);
+    sg.destroy();
+
+    // ボス：暗赤紫
+    const bg = this.add.graphics();
+    bg.fillStyle(0x8b1a1a);
+    bg.fillRect(0, 0, 48, 56);
+    bg.lineStyle(2, 0xff0000, 0.6);
+    bg.strokeRect(0, 0, 48, 56);
+    bg.generateTexture("boss", 48, 56);
+    bg.destroy();
   }
 
   private buildTileMap(): (string | null)[][] {
@@ -104,20 +126,20 @@ export class GameScene extends Phaser.Scene {
     clearHole(29, 31, 2, 3); // 中間右壁 ↔ 下段通路左壁
     clearHole(37, 31, 2, 3); // 下段通路右壁 ↔ ボス左壁
 
-    // ── 開口部：垂直接続 ──
-    clearHole(10, 13, 4, 2); // スタート床 ↔ 左縦通路天井
-    clearHole(10, 20, 4, 2); // 左縦通路床 ↔ 中間天井
-    clearHole(54, 13, 4, 2); // アビリティ床 ↔ 右縦通路天井
-    clearHole(54, 20, 4, 2); // 右縦通路床 ↔ ボス天井
+    // ── 開口部：垂直接続（側壁を残し内側2タイルのみ開口）──
+    clearHole(11, 13, 2, 2); // スタート床 ↔ 左縦通路天井
+    clearHole(11, 20, 2, 2); // 左縦通路床 ↔ 中間天井
+    clearHole(55, 13, 2, 2); // アビリティ床 ↔ 右縦通路天井
+    clearHole(55, 20, 2, 2); // 右縦通路床 ↔ ボス天井
 
     // ── 内部プラットフォーム ──
-    addPlatform(5,  10, 6, "start");    // スタート：下段足場
-    addPlatform(15,  8, 5, "start");    // スタート：上段足場
-    addPlatform(44, 10, 5, "ability");  // アビリティ：下段足場
-    addPlatform(49,  7, 6, "ability");  // アビリティ：アイテム前足場
-    addPlatform(5,  30, 6, "middle");   // 中間エリア：足場
+    addPlatform(5,  10, 6, "start");
+    addPlatform(15,  8, 5, "start");
+    addPlatform(44, 10, 5, "ability");
+    addPlatform(49,  7, 6, "ability");
+    addPlatform(5,  30, 6, "middle");
     addPlatform(18, 27, 7, "middle");
-    addPlatform(42, 29, 7, "boss");     // ボス部屋：足場
+    addPlatform(42, 29, 7, "boss");
 
     return map;
   }
@@ -151,6 +173,27 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.collider(this.player, this.platforms);
   }
 
+  private spawnEnemies(): void {
+    const addEnemy = (enemy: Enemy) => {
+      this.physics.add.collider(enemy, this.platforms);
+      this.physics.add.collider(this.player, enemy, () => {
+        const hp = this.player.takeDamage(enemy.getContactDamage());
+        if (hp <= 0) this.time.delayedCall(300, () => this.scene.restart());
+      });
+      this.enemies.push(enemy);
+    };
+
+    // スタート部屋（穴 x=10-13 を避けてパトロール）
+    addEnemy(new Enemy(this, 18 * TILE_SIZE, 12 * TILE_SIZE, "slime", 2, 1, 80, 14 * TILE_SIZE, 27 * TILE_SIZE));
+
+    // 中間エリア（floor tile y=34 → スポーン y=33 tile、穴 x=10-13 を避ける）
+    addEnemy(new Enemy(this, 5  * TILE_SIZE, 33 * TILE_SIZE, "slime", 2, 1, 80,  1 * TILE_SIZE,  9 * TILE_SIZE));
+    addEnemy(new Enemy(this, 20 * TILE_SIZE, 33 * TILE_SIZE, "slime", 2, 1, 80, 14 * TILE_SIZE, 28 * TILE_SIZE));
+
+    // ボス部屋
+    addEnemy(new Boss(this, 1680, 33 * TILE_SIZE));
+  }
+
   private setupCamera(): void {
     const worldW = MAP_W * TILE_SIZE;
     const worldH = MAP_H * TILE_SIZE;
@@ -161,5 +204,24 @@ export class GameScene extends Phaser.Scene {
 
   update(): void {
     this.player.update();
+    this.enemies.forEach(e => { if (e.active) e.update(); });
+    this.checkAttackHits();
+  }
+
+  private checkAttackHits(): void {
+    const attackRect = this.player.getAttackRect();
+    if (!attackRect) return;
+
+    this.enemies.forEach(enemy => {
+      if (!enemy.active) return;
+      const b = enemy.getBounds();
+      if (Phaser.Geom.Intersects.RectangleToRectangle(
+        attackRect,
+        new Phaser.Geom.Rectangle(b.x, b.y, b.width, b.height)
+      )) {
+        const hp = enemy.takeDamage(1);
+        if (hp <= 0) enemy.destroy();
+      }
+    });
   }
 }
